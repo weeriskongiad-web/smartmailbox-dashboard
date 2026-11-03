@@ -39,7 +39,7 @@ export default function Home() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 5000); // อัปเดตทุก 5 วินาที
+    const interval = setInterval(fetchData, 60000); // อัปเดตทุก 60 วินาที
     return () => clearInterval(interval);
   }, []);
 
