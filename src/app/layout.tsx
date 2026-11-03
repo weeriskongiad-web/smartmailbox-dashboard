@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Smart Mailbox Dashboard",
-  description: "IoT Smart Mailbox Management System",
+  description: "IoT Smart Mailbox Management System v4",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
