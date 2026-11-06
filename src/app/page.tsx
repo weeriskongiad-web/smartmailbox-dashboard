@@ -114,9 +114,9 @@ export default function Home() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  SVG Map Component — แผนที่แบบ Visual
+//  Real Map Component — Google Maps Embed (ฟรี ไม่ต้อง API Key)
 // ═══════════════════════════════════════════════════════════════════════
-function SvgMap({ lat, lon, height = 300 }: { lat: number; lon: number; height?: number }) {
+function RealMap({ lat, lon, height = 300 }: { lat: number; lon: number; height?: number }) {
   if (!lat || !lon) {
     return (
       <div className="map-container" style={{ height, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -128,6 +128,23 @@ function SvgMap({ lat, lon, height = 300 }: { lat: number; lon: number; height?:
       </div>
     );
   }
+
+  const mapUrl = `https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed`;
+
+  return (
+    <div className="map-container" style={{ padding: 0, overflow: "hidden" }}>
+      <iframe
+        src={mapUrl}
+        width="100%"
+        height={height}
+        style={{ border: 0, borderRadius: 8 }}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        allowFullScreen
+      />
+    </div>
+  );
+}
 
   // Convert lat/lon to SVG coordinates (simplified projection)
   const cx = 200 + (lon - 100.5) * 1000;
