@@ -275,7 +275,7 @@ function OverviewView({ data, todayCount, battery, lat, lon, lastGps, uptimeHour
         <div className="card-header">
           <div className="card-title">🗺️ ตำแหน่งตู้ล่าสุด (GPS)</div>
         </div>
-        <SvgMap lat={lat} lon={lon} height={300} />
+        <RealMap lat={lat} lon={lon} height={300} />
         <div className="device-panel">
           <div className="device-info-item">
             <div className="device-info-label">พิกัดล่าสุด</div>
@@ -325,7 +325,7 @@ function MapView({ data }: any) {
         <div className="card-header">
           <div className="card-title">🗺️ ตำแหน่งตู้ล่าสุด</div>
         </div>
-        <SvgMap lat={lastGps?.lat || 0} lon={lastGps?.lon || 0} height={400} />
+        <RealMap lat={lastGps?.lat || 0} lon={lastGps?.lon || 0} height={400} />
         {lastGps && (
           <div className="device-panel">
             <div className="device-info-item">
