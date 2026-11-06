@@ -16,6 +16,7 @@ export default function Home() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -47,28 +48,43 @@ export default function Home() {
   const lastSeen = data?.status?.last_gps_time;
   const uptimeHours = 142; // Mock - คำนวณจาก boot_count หรือเวลาเริ่มต้น
 
+  const handleSetView = (newView: View) => {
+    setView(newView);
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <div className="app">
+      {/* Mobile Top Bar with Hamburger Menu */}
+      <button className="hamburger-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+        ☰
+      </button>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div className="mobile-overlay" onClick={() => setIsMobileMenuOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isMobileMenuOpen ? "sidebar-open" : ""}`}>
         <div className="logo">
           <div className="logo-icon">📬</div>
           <div className="logo-text">Smart Mailbox</div>
         </div>
         <ul className="menu">
-          <li className={`menu-item ${view === "overview" ? "active" : ""}`} onClick={() => setView("overview")}>
+          <li className={`menu-item ${view === "overview" ? "active" : ""}`} onClick={() => handleSetView("overview")}>
             <span className="menu-icon">📊</span><span>ภาพรวม</span>
           </li>
-          <li className={`menu-item ${view === "map" ? "active" : ""}`} onClick={() => setView("map")}>
+          <li className={`menu-item ${view === "map" ? "active" : ""}`} onClick={() => handleSetView("map")}>
             <span className="menu-icon">🗺️</span><span>แผนที่ตู้</span>
           </li>
-          <li className={`menu-item ${view === "mail" ? "active" : ""}`} onClick={() => setView("mail")}>
+          <li className={`menu-item ${view === "mail" ? "active" : ""}`} onClick={() => handleSetView("mail")}>
             <span className="menu-icon">📷</span><span>ประวัติซอง</span>
           </li>
-          <li className={`menu-item ${view === "stats" ? "active" : ""}`} onClick={() => setView("stats")}>
+          <li className={`menu-item ${view === "stats" ? "active" : ""}`} onClick={() => handleSetView("stats")}>
             <span className="menu-icon">📈</span><span>สถิติ</span>
           </li>
-          <li className={`menu-item ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")}>
+          <li className={`menu-item ${view === "settings" ? "active" : ""}`} onClick={() => handleSetView("settings")}>
             <span className="menu-icon">⚙️</span><span>ตั้งค่าระบบ</span>
           </li>
         </ul>
@@ -114,9 +130,9 @@ export default function Home() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  Real Map Component — Google Maps Embed (ฟรี ไม่ต้อง API Key)
+//  SVG Map Component — แผนที่แบบ Visual
 // ═══════════════════════════════════════════════════════════════════════
-function RealMap({ lat, lon, height = 300 }: { lat: number; lon: number; height?: number }) {
+function SvgMap({ lat, lon, height = 300 }: { lat: number; lon: number; height?: number }) {
   if (!lat || !lon) {
     return (
       <div className="map-container" style={{ height, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -129,19 +145,67 @@ function RealMap({ lat, lon, height = 300 }: { lat: number; lon: number; height?
     );
   }
 
-  const mapUrl = `https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed`;
+  // Convert lat/lon to SVG coordinates (simplified projection)
+  const cx = 200 + (lon - 100.5) * 1000;
+  const cy = 150 - (lat - 13.75) * 1000;
 
   return (
-    <div className="map-container" style={{ padding: 0, overflow: "hidden" }}>
-      <iframe
-        src={mapUrl}
-        width="100%"
-        height={height}
-        style={{ border: 0, borderRadius: 8 }}
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-        allowFullScreen
-      />
+    <div className="map-container">
+      <svg className="map-svg" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+        {/* Background gradient */}
+        <defs>
+          <radialGradient id="mapBg" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#0f172a" />
+            <stop offset="100%" stopColor="#020617" />
+          </radialGradient>
+        </defs>
+        <rect width="400" height="300" fill="url(#mapBg)" />
+
+        {/* Grid lines */}
+        {[50, 100, 150, 200, 250, 300, 350].map((x) => (
+          <line key={`v${x}`} x1={x} y1="0" x2={x} y2="300" stroke="#1e293b" strokeWidth="0.5" />
+        ))}
+        {[50, 100, 150, 200, 250].map((y) => (
+          <line key={`h${y}`} x1="0" y1={y} x2="400" y2={y} stroke="#1e293b" strokeWidth="0.5" />
+        ))}
+
+        {/* Roads (decorative) */}
+        <path d="M 0 200 Q 100 180 200 150 T 400 100" stroke="#334155" strokeWidth="2" fill="none" opacity="0.5" />
+        <path d="M 150 0 L 180 300" stroke="#334155" strokeWidth="2" fill="none" opacity="0.5" />
+        <path d="M 0 80 L 400 120" stroke="#334155" strokeWidth="1.5" fill="none" opacity="0.3" />
+
+        {/* Geofence circle (2.5km radius) */}
+        <circle cx={cx} cy={cy} r="80" fill="#06b6d4" fillOpacity="0.05" stroke="#06b6d4" strokeWidth="1" strokeDasharray="4,4" opacity="0.5" />
+        <text x={cx} y={cy - 85} fill="#06b6d4" fontSize="9" textAnchor="middle" opacity="0.7">Geofence 2.5km</text>
+
+        {/* GPS Trail (history) */}
+        <circle cx={cx - 3} cy={cy + 5} r="3" fill="#06b6d4" opacity="0.3" />
+        <circle cx={cx - 6} cy={cy + 10} r="2" fill="#06b6d4" opacity="0.2" />
+
+        {/* Location pin (pulsing) */}
+        <circle cx={cx} cy={cy} r="12" fill="#06b6d4" opacity="0.3">
+          <animate attributeName="r" values="8;16;8" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.3;0;0.3" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={cx} cy={cy} r="6" fill="#06b6d4" />
+        <circle cx={cx} cy={cy} r="3" fill="white" />
+
+        {/* Coordinates label */}
+        <rect x={cx - 60} y={cy + 15} width="120" height="30" rx="4" fill="#0f172a" stroke="#334155" />
+        <text x={cx} y={cy + 28} fill="#06b6d4" fontSize="9" textAnchor="middle" fontFamily="monospace">
+          {lat.toFixed(5)}, {lon.toFixed(5)}
+        </text>
+        <text x={cx} y={cy + 38} fill="#64748b" fontSize="8" textAnchor="middle">
+          📍 Smart Mailbox Location
+        </text>
+
+        {/* Compass */}
+        <g transform="translate(360, 30)">
+          <circle cx="0" cy="0" r="15" fill="#1e293b" stroke="#334155" />
+          <text x="0" y="-5" fill="#06b6d4" fontSize="8" textAnchor="middle">N</text>
+          <line x1="0" y1="-10" x2="0" y2="10" stroke="#475569" strokeWidth="0.5" />
+        </g>
+      </svg>
     </div>
   );
 }
@@ -227,7 +291,7 @@ function OverviewView({ data, todayCount, battery, lat, lon, lastGps, uptimeHour
         <div className="card-header">
           <div className="card-title">🗺️ ตำแหน่งตู้ล่าสุด (GPS)</div>
         </div>
-        <RealMap lat={lat} lon={lon} height={300} />
+        <SvgMap lat={lat} lon={lon} height={300} />
         <div className="device-panel">
           <div className="device-info-item">
             <div className="device-info-label">พิกัดล่าสุด</div>
@@ -277,7 +341,7 @@ function MapView({ data }: any) {
         <div className="card-header">
           <div className="card-title">🗺️ ตำแหน่งตู้ล่าสุด</div>
         </div>
-        <RealMap lat={lastGps?.lat || 0} lon={lastGps?.lon || 0} height={400} />
+        <SvgMap lat={lastGps?.lat || 0} lon={lastGps?.lon || 0} height={400} />
         {lastGps && (
           <div className="device-panel">
             <div className="device-info-item">
