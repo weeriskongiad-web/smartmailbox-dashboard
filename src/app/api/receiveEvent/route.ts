@@ -189,7 +189,7 @@ async function handleImageUpload(buffer: Buffer, captureIndex: number, weight: s
   }
 
   // ─── ส่งภาพไป LINE + Telegram (เฉพาะ capture #2) ───
-  if (captureIndex === 2) {
+  if (captureIndex === 1) {
     const text = `📬 มีซองหยอดตู้!\nเวลา: ${new Date().toLocaleString("th-TH")}\nน้ำหนัก: ${weight}g`;
 
     try {
