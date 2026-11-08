@@ -1,159 +1,125 @@
 // ═══════════════════════════════════════════════════════════════════════
-//  DEBUG ENDPOINT — ทดสอบ Firestore write โดยตรง
-//  URL: https://smartmailbox-dashboard.vercel.app/api/debug
+//  GET /api/events — ดึงข้อมูลล่าสุด (แบบง่าย ไม่ต้องสร้าง index)
 // ═══════════════════════════════════════════════════════════════════════
 
 import { NextResponse } from "next/server";
-import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { db } from "@/lib/firestore";
 
 export async function GET() {
-  const result: any = {
-    timestamp: new Date().toISOString(),
-    steps: [],
-  };
-
-  // ─── STEP 1: Check env var ───────────────────────────────────────────
-  const rawEnv = process.env.FIREBASE_SERVICE_ACCOUNT || "";
-  result.steps.push({
-    step: 1,
-    name: "Check FIREBASE_SERVICE_ACCOUNT env var",
-    env_var_exists: rawEnv.length > 0,
-    env_var_length: rawEnv.length,
-    env_var_starts_with: rawEnv.substring(0, 10),
-    env_var_ends_with: rawEnv.substring(rawEnv.length - 10),
-  });
-
-  if (rawEnv.length === 0) {
-    result.error = "FIREBASE_SERVICE_ACCOUNT env var is empty!";
-    return NextResponse.json(result, { status: 500 });
+  if (!db) {
+    return NextResponse.json(
+      { error: "Firestore not connected" },
+      { status: 500 }
+    );
   }
 
-  // ─── STEP 2: Parse JSON ─────────────────────────────────────────────
-  let serviceAccount: any;
   try {
-    serviceAccount = JSON.parse(rawEnv);
-    result.steps.push({
-      step: 2,
-      name: "Parse JSON",
-      success: true,
-      project_id: serviceAccount.project_id,
-      client_email: serviceAccount.client_email,
-      has_private_key: !!serviceAccount.private_key,
-    });
-  } catch (err: any) {
-    result.steps.push({
-      step: 2,
-      name: "Parse JSON",
-      success: false,
-      error: err.message,
-      raw_first_50_chars: rawEnv.substring(0, 50),
-    });
-    result.error = "JSON parse failed: " + err.message;
-    return NextResponse.json(result, { status: 500 });
-  }
-
-  // ─── STEP 3: Initialize Firebase ───────────────────────────────────
-  let db: ReturnType<typeof getFirestore> | null = null;
-  try {
-    if (getApps().length === 0) {
-      const app = initializeApp({
-        credential: cert(serviceAccount),
-      });
-      result.steps.push({
-        step: 3,
-        name: "Initialize Firebase App",
-        success: true,
-        app_name: app.name,
-      });
-    } else {
-      result.steps.push({
-        step: 3,
-        name: "Initialize Firebase App",
-        success: true,
-        note: "Already initialized",
-      });
+    // ─── 1. ดึงสถานะตู้ปัจจุบัน ─────────────────────────────────────────
+    let status = null;
+    try {
+      const statusDoc = await db.collection("mailbox_status").doc("current").get();
+      status = statusDoc.exists ? statusDoc.data() : null;
+    } catch (e) {
+      console.log("[EVENTS] No status doc yet");
     }
-    db = getFirestore();
-    result.steps.push({
-      step: 3.1,
-      name: "Get Firestore instance",
-      success: db !== null,
-    });
-  } catch (err: any) {
-    result.steps.push({
-      step: 3,
-      name: "Initialize Firebase",
-      success: false,
-      error: err.message,
-    });
-    result.error = "Firebase init failed: " + err.message;
-    return NextResponse.json(result, { status: 500 });
-  }
 
-  // ─── STEP 4: Try WRITE to Firestore ─────────────────────────────────
-  const testDocRef = db.collection("debug_test").doc("test_" + Date.now());
-  try {
-    await testDocRef.set({
-      message: "Hello from debug endpoint",
-      timestamp: new Date(),
-      test: true,
-    });
-    result.steps.push({
-      step: 4,
-      name: "WRITE to debug_test collection",
-      success: true,
-      doc_id: testDocRef.id,
-    });
-  } catch (err: any) {
-    result.steps.push({
-      step: 4,
-      name: "WRITE to debug_test collection",
-      success: false,
-      error: err.message,
-      error_code: err.code,
-    });
-    result.error = "Write failed: " + err.message;
-    return NextResponse.json(result, { status: 500 });
-  }
+    // ─── 2. ดึง mail events ล่าสุด 10 รายการ (ไม่ filter เพื่อหลีกเลี่ยง index) ─
+    let mailEvents: any[] = [];
+    try {
+      const mailSnapshot = await db.collection("mail_events")
+        .orderBy("timestamp", "desc")
+        .limit(10)
+        .get();
+      mailEvents = mailSnapshot.docs.map((doc: any) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+          type: data.type || "metadata",
+          weight: data.weight,
+          battery: data.battery,
+          capture_index: data.capture_index,
+          image_url: data.image_url,
+        };
+      });
+    } catch (e) {
+      console.error("[EVENTS] mail_events query error:", e);
+    }
 
-  // ─── STEP 5: Try READ from Firestore ───────────────────────────────
-  try {
-    const doc = await testDocRef.get();
-    result.steps.push({
-      step: 5,
-      name: "READ back the test doc",
-      success: doc.exists,
-      data: doc.data(),
-    });
-  } catch (err: any) {
-    result.steps.push({
-      step: 5,
-      name: "READ back the test doc",
-      success: false,
-      error: err.message,
-    });
-  }
+    // ─── 3. ดึง GPS logs ล่าสุด 5 รายการ ──────────────────────────────────
+    let gpsLogs: any[] = [];
+    try {
+      const gpsSnapshot = await db.collection("gps_logs")
+        .orderBy("timestamp", "desc")
+        .limit(5)
+        .get();
+      gpsLogs = gpsSnapshot.docs.map((doc: any) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          lat: data.lat,
+          lon: data.lon,
+          satellites: data.satellites,
+          hdop: data.hdop,
+          battery: data.battery,
+          timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+        };
+      });
+    } catch (e) {
+      console.error("[EVENTS] gps_logs query error:", e);
+    }
 
-  // ─── STEP 6: List collections ──────────────────────────────────────
-  try {
-    const collections = await db.listCollections();
-    result.steps.push({
-      step: 6,
-      name: "List collections",
-      success: true,
-      collections: collections.map((c: any) => c.id),
-    });
-  } catch (err: any) {
-    result.steps.push({
-      step: 6,
-      name: "List collections",
-      success: false,
-      error: err.message,
-    });
-  }
+    // ─── 4. ดึง alerts ล่าสุด 5 รายการ ──────────────────────────────────
+    let alerts: any[] = [];
+    try {
+      const alertsSnapshot = await db.collection("alerts")
+        .orderBy("timestamp", "desc")
+        .limit(5)
+        .get();
+      alerts = alertsSnapshot.docs.map((doc: any) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: data.type,
+          message: data.message,
+          timestamp: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+        };
+      });
+    } catch (e) {
+      console.error("[EVENTS] alerts query error:", e);
+    }
 
-  result.success = true;
-  result.message = "All steps completed. Check Firestore Database → Data tab for the debug_test collection!";
-  return NextResponse.json(result, { status: 200 });
+    // ─── 5. นับซองวันนี้ (แบบง่าย — นับจาก mail_events ทั้งหมดที่มี image_url) ─
+    let todayMailCount = 0;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const allMailSnapshot = await db.collection("mail_events")
+        .orderBy("timestamp", "desc")
+        .limit(50)
+        .get();
+      todayMailCount = allMailSnapshot.docs.filter((doc: any) => {
+        const data = doc.data();
+        const ts = data.timestamp?.toDate?.() || new Date(0);
+        return ts >= today && data.image_url;
+      }).length;
+    } catch (e) {
+      console.error("[EVENTS] count error:", e);
+    }
+
+    return NextResponse.json({
+      status,
+      mail_events: mailEvents,
+      gps_logs: gpsLogs,
+      today_mail_count: todayMailCount,
+      alerts,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[GET /api/events] Error:", error);
+    return NextResponse.json(
+      { error: "Failed", message: String(error) },
+      { status: 500 }
+    );
+  }
 }
