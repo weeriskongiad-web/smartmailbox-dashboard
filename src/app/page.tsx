@@ -35,7 +35,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000); // ⭐ 60 วินาที
+    const interval = setInterval(fetchData, 300000); // 5 นาที (300,000 ms)
     return () => clearInterval(interval);
   }, [fetchData]);
 
